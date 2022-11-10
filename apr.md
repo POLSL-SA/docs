@@ -1,8 +1,8 @@
 ---
 # Metadata
 title: Analysis and project requirements
-author: "Krzysztof Dziembała"
-date: \today
+author: Krzysztof Dziembała
+date: "2022-11-10"
 
 # Pandoc document settings
 standalone: true
@@ -45,7 +45,22 @@ lof: false # List of figures
 
 ### Loading files (POLSL-SE/whaaale#?)
 
-**Description:** Enumerating available loaders, showing an "Open file" dialog, passing file to a relevant loader and catching loader exceptions.
+**Description:** Enumerating available loaders, showing an "Open file" dialog, passing selected file to a relevant loader and catching loader exceptions.
+
+**Result:** Replace image data object in the memory with data returned from loader.
+
+**Side effects:** Switch display mode to monochromatic and first band.
+
+#### MATLAB file loader
+
+A loader which accepts `.mat` files, returns the only three-dimensional variable from such file or one selected by user from a list, if there are multiple such variables.
+
+#### ENVI file loader
+
+A loader accepting ENVI files with headers. Reports compatibility with `.hdr` files. Requires a file with the same name and no `.hdr` extension in the same directory as header. Returns a three-dimensional array with data and if possible wavelength labels for all bands.
+
+> **Note**
+> These are the files in AVIRIS datasets
 
 ## Non-functional
 
@@ -76,4 +91,4 @@ All text files must be UTF-8 encoded and saved with LF line endings.
 
 #### Python source style
 
-Source code files in Python must be formatted with black/autopep8 (TODO, select formatter)
+Source code files in Python must be formatted with black.
