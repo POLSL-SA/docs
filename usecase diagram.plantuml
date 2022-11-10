@@ -1,0 +1,32 @@
+@startuml
+left to right direction
+
+actor User as u
+
+package Whaaale {
+   usecase "Open image" as UCopen
+   usecase "Display a single band" as UCsingle_band
+   usecase "Display fake-colored image" as UCRGB
+   usecase "Select similar pixels" as UCsimilar
+   usecase "Display curve for a pixel" as UCcurve_px
+   usecase "Display curves for a region" as UCcurve_area
+   usecase "Display curve(s)" as UCcurve
+   usecase "Export curve(s)" as UCexport
+}
+
+u --> UCopen
+u --> UCsingle_band
+u --> UCRGB
+u --> UCsimilar
+u --> UCexport
+u --> UCcurve_px
+u --> UCcurve_area
+UCopen .-> UCsingle_band : precedes
+UCopen .-> UCRGB : precedes
+UCopen .-> UCsimilar : precedes
+UCopen .-> UCcurve_px : precedes
+UCopen .-> UCcurve_area : precedes
+UCcurve_px .-> UCcurve : expands
+UCcurve_area .-> UCcurve : expands
+UCcurve .-> UCexport : precedes
+@enduml
