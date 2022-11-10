@@ -43,15 +43,15 @@ lof: false # List of figures
 
 ## Functional
 
-### 0 (POLSL-SE/whaaale#?)
+### Loading files (POLSL-SE/whaaale#?)
 
-zzz
+**Description:** Enumerating available loaders, showing an "Open file" dialog, passing file to a relevant loader and catching loader exceptions.
 
 ## Non-functional
 
 ### Performance
 
-???
+??? (hard to estimate without a prototype)
 
 ### Portability
 
@@ -64,4 +64,16 @@ All buttons with icons must have a label visible after hovering them with a mous
 
 ### Reliability
 
-All errors during
+All errors during file I/O (loading images, exporting curves) must be caught and displayed in a dialog box.
+
+### Code organisation
+
+Code must adhere to the following criteria:
+
+#### Text file format
+
+All text files must be UTF-8 encoded and saved with LF line endings.
+
+#### Python source style
+
+Source code files in Python must be formatted with black/autopep8 (TODO, select formatter)
