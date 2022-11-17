@@ -7,6 +7,10 @@ date: "2022-11-17"
 # Pandoc document settings
 standalone: true
 lang: en-GB
+# Lua filter settings (tables-vrules from chrisaga/lua-filters, `-L tables-rules.lua`)
+# https://github.com/chrisaga/lua-filters/tree/tables-vrules/tables-vrules
+tables-vrules: true
+tables-hrules: true
 # Pandoc LaTeX variables
 geometry: [a4paper, bindingoffset=0mm, inner=30mm, outer=30mm, top=30mm, bottom=30mm]
 # documentclass: report
@@ -16,7 +20,7 @@ numbersections: true
 toc: false
 lof: false # List of figures
 
-header-includes:
+# header-includes:
   # Remove "Chapter N" from the line above chapter name in report class document
   # I could not include a file for some reason, but this works
   # - |
