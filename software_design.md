@@ -66,7 +66,7 @@ classDiagram
     SELECT_AREA_SECOND
     SELECT_SIMILAR
   }
-  IntEnum --|> ApplicationState
+  IntEnum <|-- ApplicationState
 
   class ImageMode {
     <<Enumeration>>
@@ -74,7 +74,7 @@ classDiagram
     RGB
     SIMILAR
   }
-  IntEnum --|> ImageMode
+  IntEnum <|-- ImageMode
 
   class MainWindow {
     Loader loader
@@ -124,18 +124,36 @@ classDiagram
     show_select_var()
   }
 
-  class SpectralViewver {
+  class SpectralViewer {
     MainWindow parent
     QChartView chart_view
-    dict~str, ndarray~ data
+    AreaValues|PixelValues data
+    int max_data
     from_pixel(ndarray pixel)
     from_area(ndarray area)
     update_labels(list~str~ labels)
+    set_max(int max)
     clear()
     export_csv()
     export_png()
   }
-  SpectralViewver "0..1" --* "1" MainWindow
+  SpectralViewer "0..1" --* "1" MainWindow
+  AreaValues --o SpectralViewer
+  PixelValues --o SpectralViewer
+
+  class AreaValues {
+    ndarray avg
+    ndarray min
+    ndarray max
+    ndarray quartile_low
+    ndarray quartile_high
+  }
+  TypedDict <|-- AreaValues
+
+  class PixelValues {
+    ndarray values
+  }
+  TypedDict <|-- PixelValues
 
   ENVILoader ..|> AbstractFileLoader : Implements
   MatlabLoader ..|> AbstractFileLoader : Implements
