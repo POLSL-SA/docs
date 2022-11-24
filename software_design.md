@@ -13,7 +13,8 @@ geometry: [a4paper, bindingoffset=0mm, inner=30mm, outer=30mm, top=30mm, bottom=
 fontsize: 12pt
 colorlinks: true
 numbersections: true
-toc: false
+toc: true
+toc-depth: 4
 lof: false # List of figures
 
 header-includes:
@@ -37,6 +38,15 @@ header-includes:
     \usepackage{fvextra}
     \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
     ````
+  # Make \paragraph (4-th level header) a header instead of a paragraph
+  - |
+    ````{=latex}
+    \usepackage{titlesec}
+    \titleformat{\paragraph}
+    {\normalfont\normalsize\bfseries}{\theparagraph}{1em}{}
+    \titlespacing*{\paragraph}
+    {0pt}{3.25ex plus 1ex minus .2ex}{1.5ex plus .2ex}
+    ````
 ---
 
 <!-- markdownlint-configure-file
@@ -52,7 +62,7 @@ header-includes:
 ## UML diagram
 
 <!-- mermaid-filter (npm i -g mermaid-filter) has to be installed and pandoc should be executed with `-F mermaid-filter[.cmd]` (.cmd on Windows) -->
-```{.mermaid format=pdf}
+```{.mermaid format=pdf width=1200}
 classDiagram
   class Loader {
     -list~AbstractFileLoader~ loaders
@@ -165,7 +175,7 @@ classDiagram
 
   AreaValues "0..1" --o "1" SpectralViewer
   PixelValues "0..1" --o "1" SpectralViewer
-  AreaValues .. PixelValues : xor
+  AreaValues .. PixelValues : or
 
   class AreaValues {
     ndarray avg
@@ -275,14 +285,14 @@ Derived from [`AbstractFileLoader`](#abstractfileloader). Supports `.mat` files.
     )
     ```
 
-2. For matfiles <= 7.2 use [`scipy.io.loadmat`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.io.loadmat.html)\
+2. For MAT-files <= 7.2 use [`scipy.io.loadmat`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.io.loadmat.html)\
    For 7.3 use [`h5py`](https://docs.h5py.org/en/stable/index.html) (a HDF5 library for Python). `h5py` is not available for Python 3.11 yet.
 
 3. **Warning:** Some datasets have negative values instead of using unsigned integers.
 
 ### `ENVILoader`
 
-Derived from [`AbstractFileLoader`](#abstractfileloader). Supports ENVI `.hdr` labelled files. Should report compatibility with `.hdr` files, but a file with the same name, but no `.hdr` extension must exisit in the same directory.
+Derived from [`AbstractFileLoader`](#abstractfileloader). Supports ENVI `.hdr` labelled files. Should report compatibility with `.hdr` files, but a file with the same name, but no `.hdr` extension must exist in the same directory.
 
 #### Notes for implementer
 
@@ -381,6 +391,256 @@ stateDiagram-v2
   SelectArea --> sim : Select similar pixels clicked
 ```
 
-## Dynamic diagrams
+## User interactions
 
-**TODO:** For each use case draw interactions between classes.
+### Open image
+
+<!-- Requires "break" introduced in mermaid 9.1.2. Updated mermaid-filter is available on GitHub Packages as @krzysdz/mermaid-filter. -->
+```{.mermaid format=pdf width=1200}
+sequenceDiagram
+  actor User
+  participant Main as MainWindow
+  participant Loader
+  participant ML as MatlabLoader
+  participant ENVI as ENVILoader
+  participant Img as HsImage
+  participant Prev as ImagePreview
+  participant Chart as SpectralViewer
+
+  User->>Main: Open file
+  Main->>+Loader: Open file
+  Loader-->Loader: Get file loaders
+
+  par Matlab loader details
+    Loader->>+ML: Get filter name
+    ML-->>-Loader: Return filter name
+    Loader->>+ML: Get supported extensions
+    ML-->>-Loader: Return supported extensions
+  and ENVI loader details
+    Loader->>+ENVI: Get filter name
+    ENVI-->>-Loader: Return filter name
+    Loader->>+ENVI: Get supported extensions
+    ENVI-->>-Loader: Return supported extensions
+  end
+
+  Loader->>+User: Show "Open file" dialog
+  User->>-Loader: Select file
+
+  alt File is supported by MatlabLoader
+    Loader->>+ML: Load file
+    alt Multiple 3D variables in file
+      ML->>+User: Show variable picker dialog
+      User->>-ML: Select a variable
+    end
+    ML-->Img: Create
+    ML-->>-Loader: Return HsImage
+  else File is supported by ENVILoader
+    Loader->>+ENVI: Load file
+    break If data file is missing
+      ENVI-->Loader: Throw an exception
+      Loader->>User: Display an error message
+    end
+    ENVI-->Img: Create
+    ENVI-->>-Loader: Return HsImage
+  end
+
+  Loader-->>-Main: Return HsImage
+  Main-->Main: Reset band setting
+  Main-->Main: Set state to IMAGE_LOADED
+  Main->>Prev: Clear rubber band
+  Main->>+Prev: Update image
+  Prev-->>-User: Show new image
+  Main->>Chart: Clear chart
+  Main->>Chart: Update labels
+```
+
+### Display a single band
+
+```{.mermaid format=pdf width=1200}
+sequenceDiagram
+  actor User
+  participant Main as MainWindow
+  participant Img as HsImage
+  participant Prev as ImagePreview
+
+  note over Main,Prev: Image must already be loaded
+
+  User->>Main: Display a single band
+  Main-->Main: Set mode to MONO
+  Main->>+Img: Get band
+  Img-->>-Main: Return image band
+  Main->>+Prev: Render a single band
+  Prev-->>-User: Display image preview
+
+  User->>Main: Change band for MONO mode
+  Main->>+Img: Get band
+  Img-->>-Main: Return image band
+  Main->>+Prev: Render a single band
+  Prev-->>-User: Display updated image preview
+```
+
+### Display fake-colored image
+
+```{.mermaid format=pdf width=1200}
+sequenceDiagram
+  actor User
+  participant Main as MainWindow
+  participant Img as HsImage
+  participant Prev as ImagePreview
+
+  note over Main,Prev: Image must already be loaded
+
+  User->>Main: Display fake-colored image
+  Main-->Main: Set mode to RGB
+  Main->>+Img: Get RGB bands
+  Img-->>-Main: Return bands
+  Main->>+Prev: Render an RGB image
+  Prev-->>-User: Display image preview
+
+  User->>Main: Change a[n] R/G/B band
+  Main->>+Img: Get RGB bands
+  Img-->>-Main: Return bands
+  Main->>+Prev: Render an RGB image
+  Prev-->>-User: Display updated image preview
+```
+
+### Display curve for a single pixel
+
+```{.mermaid format=pdf width=1200}
+sequenceDiagram
+  actor User
+  participant Main as MainWindow
+  participant Img as HsImage
+  participant Prev as ImagePreview
+  participant Chart as SpectralViewer
+
+  note over Main,Chart: Image must already be loaded
+
+  User->>Main: Curve for a pixel
+  Main-->Main: Set state to SELECT_PX
+  User->>+Prev: Clicks (mouse up) on an image
+  Prev->>-Main: Mouse up pixel coordinates
+  activate Main
+  Main-->Main: Set state to IMAGE_LOADED
+  Main->>+Img: Get pixel
+  Img-->>-Main: Return pixel data
+  Main->>-Chart: Create a chart from pixel data
+  activate Chart
+  Chart-->>-User: Display the updated chart
+```
+
+### Display curve for a region
+
+```{.mermaid format=pdf width=1200}
+sequenceDiagram
+  actor User
+  participant Main as MainWindow
+  participant Img as HsImage
+  participant Prev as ImagePreview
+  participant Chart as SpectralViewer
+
+  note over Main,Chart: Image must already be loaded
+
+  User->>Main: Curve for an area
+  Main-->Main: Set state to SELECT_AREA_FIRST
+  User->>+Prev: Clicks (mouse down) on an image
+  Prev->>-Main: Mouse down pixel coordinates
+  activate Main
+  Main-->Main: Save start position
+  Main-->Main: Set state to SELECT_AREA_SECOND
+  Main->>-Prev: Start drawing a rubber band
+  loop Until mouse up
+    User->>+Prev: Moves the cursor
+    Prev-->>-User: Update rubber band shape
+  end
+  User->>+Prev: Clicks (mouse up) on an image
+  Prev->>-Main: Mouse up pixel coordinates
+  activate Main
+  Main->>+Img: Get area data
+  Img-->>-Main: Return area data
+  Main->>-Chart: Create a chart from area
+  activate Chart
+  Chart-->>-User: Display the updated chart
+```
+
+### Select similar pixels
+
+```{.mermaid format=pdf width=1200}
+sequenceDiagram
+  actor User
+  participant Main as MainWindow
+  participant Img as HsImage
+  participant Prev as ImagePreview
+
+  note over Main,Prev: Image must already be loaded
+
+  User->>Main: Select similar pixels
+  Main-->Main: Set state to SELECT_SIMILAR
+  opt Adjusting threshold
+    User->>Main: Change threshold
+  end
+  User->>+Prev: Clicks (mouse up) on an image
+  Prev->>-Main: Mouse up pixel coordinates
+  activate Main
+  Main-->Main: Set state to IMAGE_LOADED
+  Main-->Main: Set mode to SIMILAR
+  Main->>+Img: Get band
+  Img-->>-Main: Return image band
+  Main->>+Img: Get similar pixels
+  Img-->>-Main: Return similarity map
+  Main->>+Prev: Render a single band with similar pixels
+  deactivate Main
+  Prev-->>-User: Display updated image preview
+```
+
+### Export spectral curve(s)
+
+#### Export as CSV
+
+```{.mermaid format=pdf width=1200}
+sequenceDiagram
+  actor User
+  participant Main as MainWindow
+  participant Chart as SpectralViewer
+  participant File as File-like object
+
+  note over Main,File: A chart must already exist
+
+  User->>Main: Export chart as CSV
+  Main->>+Chart: Export as CSV
+  Chart->>+User: Show "Save file" dialog
+  User->>-Chart: Select file
+  Chart-->File: Open for writing
+  break Opening for writing fails
+    File-->Chart: Throw an exception
+    Chart->>User: Display an error message
+  end
+  Chart->>File: Write data
+  Chart->>File: Close
+  deactivate Chart
+```
+
+#### Export as PNG
+
+```{.mermaid format=pdf width=1200}
+sequenceDiagram
+  actor User
+  participant Main as MainWindow
+  participant Chart as SpectralViewer
+  participant Pixmap as QPixmap
+
+  note over Main,Pixmap: A chart must already exist
+
+  User->>Main: Export chart as PNG
+  Main->>+Chart: Export as PNG
+  Chart->>+User: Show "Save file" dialog
+  User->>-Chart: Select file
+  Chart-->Pixmap: Render to QPixmap
+  Chart->>+Pixmap: Save to file
+  break Saving QPixmap fails
+    Pixmap-->>-Chart: Return false
+    note left of Pixmap: QPixmap does not return detailed errors
+    Chart->>User: Display an error message
+  end
+  deactivate Chart
+```
