@@ -2,7 +2,7 @@
 # Metadata
 title: Software Design
 author: Team 7RS
-date: \today
+date: "2022-11-24"
 
 # Pandoc document settings
 standalone: true
@@ -16,7 +16,7 @@ numbersections: true
 toc: false
 lof: false # List of figures
 
-# header-includes:
+header-includes:
   # Remove "Chapter N" from the line above chapter name in report class document
   # I could not include a file for some reason, but this works
   # - |
@@ -31,7 +31,19 @@ lof: false # List of figures
   #   ````{=latex}
   #   \counterwithout{footnote}{chapter}
   #   ````
+  # Wrap long source code lines
+  - |
+    ````{=latex}
+    \usepackage{fvextra}
+    \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+    ````
 ---
+
+<!-- markdownlint-configure-file
+{
+  "MD024": { "allow_different_nesting": true }
+}
+-->
 
 <!-- Allow multiple top-level headers (interpreted as chapters by pandoc) -->
 <!-- markdownlint-disable MD025 -->
@@ -43,17 +55,19 @@ lof: false # List of figures
 ```{.mermaid format=pdf}
 classDiagram
   class Loader {
-    list~AbstractFileLoader~ loaders
-    supported_types() list~str~
-    open_file() HsImage
+    -list~AbstractFileLoader~ loaders
+    -QWidget parent
+    -supported_types() list~str~
+    +open_file() HsImage
+    -show_error(Exception e)
+    -load_file(str path) HsImage
   }
 
   class AbstractFileLoader {
     <<Abstract>>
-    str FILE_FILTER$
-    MainWindow parent
-    load_file() HsImage
-    show_error(Exception e)
+    +str FILE_FILTER_NAME*
+    +list~str~ EXTENSIONS*
+    +load_file(str path)* HsImage
   }
 
   %% from enum import IntEnum
@@ -77,69 +91,81 @@ classDiagram
   IntEnum <|-- ImageMode
 
   class MainWindow {
-    Loader loader
-    ApplicationState state
-    HsImage|None image
-    tuple~int, int~|None start_position
-    ImageMode image_mode
-    int band_mono
-    int band_r
-    int band_g
-    int band_b
-    ImagePreview preview
-    SpectralViewer viewer
+    -Loader loader
+    -ApplicationState state
+    -HsImage|None image
+    -tuple~int, int~|None start_position
+    -ImageMode image_mode
+    -int band_mono
+    -int band_r
+    -int band_g
+    -int band_b
+    -ImagePreview preview
+    -SpectralViewer viewer
 
-    on_mode_change()
-    on_band_change()
+    +on_mode_change()
+    +on_band_change()
+    +on_mouse_down(tuple~int, int~ coordinates)
+    +on_mouse_up(tuple~int, int~ coordinates)
   }
   MainWindow --> ApplicationState
   MainWindow --> ImageMode
   HsImage "0..1" --* "1" MainWindow
-  ImagePreview "0..1" --* "1" MainWindow
   Loader "1" --* "1" MainWindow
+  ImagePreview "0..1" --* "1" MainWindow
+  MainWindow --|> QMainWindow
 
   %% bpp = bits per pixel, usually 8 or 16
   %% labels should be a sequence 1..=N if not provided with data
   class HsImage {
-    ndarray data
-    int bpp
-    list~str~ labels
-    get_pixel(int x, int y) ndarray
-    get_area(tuple~int, int~ p1, tuple~int, int~ p2) ndarray
+    -ndarray data
+    +int bpp
+    +list~str~ labels
+    +get_pixel(int x, int y) ndarray
+    +get_area(tuple~int, int~ p1, tuple~int, int~ p2) ndarray
+    +get_similar(tuple~int, int~ base, float threshold) ndarray
+    +get_band(int idx) ndarray
+    +get_RGB_bands(int r_idx, int g_idx, int b_idx) ndarray
   }
 
   class ImagePreview {
-    QPixmap bitmap
-    MainWindow parent
-    QRubberBand|None rubber_band
-    on_mouse_down(QMouseEvent event)
-    on_mouse_up(QMouseEvent event)
-    on_mouse_move(QMouseEvent event)
-    draw_rubber_band_from(tuple~int, int~ start)
-    clear_rubber_band()
+    -QPixmap bitmap
+    -MainWindow parent
+    -QRubberBand|None rubber_band
+    -on_mouse_down(QMouseEvent event)
+    -on_mouse_up(QMouseEvent event)
+    -on_mouse_move(QMouseEvent event)
+    +draw_rubber_band_from(tuple~int, int~ start)
+    +clear_rubber_band()
+    +render_single(ndarray band, int bpp)
+    +render_rgb(ndarray rgb_bands, int bpp)
+    +render_similar(ndarray band, int bpp, ndarray mask)
   }
+  ImagePreview --> MainWindow : dispatches mouse events
 
   class MatlabLoader {
-    list~str~ variables
-    show_select_var()
+    -load_hdf5(file) HsImage
+    -load_mat_b72(file) HsImage
   }
 
   class SpectralViewer {
-    MainWindow parent
-    QChartView chart_view
-    AreaValues|PixelValues data
-    int max_data
-    from_pixel(ndarray pixel)
-    from_area(ndarray area)
-    update_labels(list~str~ labels)
-    set_max(int max)
-    clear()
-    export_csv()
-    export_png()
+    -MainWindow parent
+    -QChart chart
+    -QChartView chart_view
+    -AreaValues|PixelValues|None data
+    -list~str~ labels
+    +from_pixel(ndarray pixel)
+    +from_area(ndarray area)
+    +update_labels(list~str~ labels)
+    +clear()
+    +export_csv()
+    +export_png()
   }
   SpectralViewer "0..1" --* "1" MainWindow
-  AreaValues --o SpectralViewer
-  PixelValues --o SpectralViewer
+
+  AreaValues "0..1" --o "1" SpectralViewer
+  PixelValues "0..1" --o "1" SpectralViewer
+  AreaValues .. PixelValues : xor
 
   class AreaValues {
     ndarray avg
@@ -165,13 +191,140 @@ classDiagram
 
 ### `MainWindow`
 
-Contains UI setup, most UI elements and event handlers
+Derived from `QMainWindow`. Contains UI setup, most UI elements and event handlers for buttons.
+
+Stores:
+
+- loaded image
+- [state](#state-diagram)
+- image mode
+- selected bands
+  - mono
+  - red
+  - green
+  - blue
+- tolerance for the *magic wand* functionality
+- starting position of area selection
+
+Event handlers:
+
+- open file menu action - request loading file from [`Loader`](#loader)\
+  After the file is loaded:
+  1. Save the [`HsImage`](#hsimage)
+  2. Set state to `IMAGE_LOADED`
+  3. Reset selected bands to default values
+  4. Clear [`SpectralViewer`](#spectralviewer) or update it with the whole image and update its labels
+  5. Clear the rubber band on [`ImagePreview`](#imagepreview)
+  6. Render the new image in [`ImagePreview`](#imagepreview)
+- mode selection - display appropriate band settings and update the preview
+- band change - save the new value and update the preview
+- ESC button clicked - set state to `IMAGE_LOADED` (or `NO_IMAGE`) and clear the rubber band
+- select pixel/area/similar - update the state according to the clicked button
+
+Actions triggered by [`ImagePreview`](#imagepreview):
+
+- mouse down - ignore if not in `SELECT_AREA_FIRST` state, save `start_position`, request drawing a rubber band and change state to `SELECT_AREA_SECOND`
+- mouse up - action depends on current state:
+  - `SELECT_PX` - get selected pixel and update [`SpectralViewer`](#spectralviewer)
+  - `SELECT_AREA_SECOND` - get area between `start_position` and received coordinates and update [`SpectralViewer`](#spectralviewer)
+  - `SELECT_SIMILAR` - get similar pixels, change image mode to `SIMILAR` and update [`ImagePreview`](#imagepreview)
+
+  After any of those actions state must be restored to `IMAGE_LOADED`.
+
+### `Loader`
+
+Provides an interface for loading files. Manages errors during file loading (I/O, invalid format, expectations not met, etc.).
+Has a list of available file loaders.
+
+#### Notes for implementer
+
+1. Use static `QFileDialog` methods - it is simpler to implement. Example:
+
+    ```python
+    file_path, used_filter = QFileDialog.getOpenFileName(
+        parent,
+        "Open image",
+        "",
+        "Matlab file (*.mat);;ENVI .hdr labelled image (*.hdr);;All supported types (*.mat *.hdr)",
+    )
+    ```
+
+2. Keep (or get as a function parameter) a reference to parent, to block the parent (main) window, while a dialog (open file, file loader *settings* or error) is open.
+3. Error messages can be displayed using `QMessageBox` with static `.warning` or property-based API if informative or detailed text should be set.
+
+### `AbstractFileLoader`
+
+An [abstract base class](https://docs.python.org/3/library/abc.html) for specialised file loaders. Each loader must have a getter for a friendly *category* name and a list of supported extensions. `load_file(path: str) -> HsImage` abstract method provides an universal interface for loading files.
+
+### `MatlabLoader`
+
+Derived from [`AbstractFileLoader`](#abstractfileloader). Supports `.mat` files. If multiple three-dimensional variables are available prompt the user for selection.
+
+#### Notes for implementer
+
+1. `QInputDialog` can be used for variable selection:
+
+    ```python
+    variable_names = ["data", "something", "a_name"]
+    selected_var, ok = QInputDialog.getItem(
+        parent,
+        "Select variable",
+        "Variable containing image data",
+        variable_names,
+        editable=False,
+    )
+    ```
+
+2. For matfiles <= 7.2 use [`scipy.io.loadmat`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.io.loadmat.html)\
+   For 7.3 use [`h5py`](https://docs.h5py.org/en/stable/index.html) (a HDF5 library for Python). `h5py` is not available for Python 3.11 yet.
+
+3. **Warning:** Some datasets have negative values instead of using unsigned integers.
+
+### `ENVILoader`
+
+Derived from [`AbstractFileLoader`](#abstractfileloader). Supports ENVI `.hdr` labelled files. Should report compatibility with `.hdr` files, but a file with the same name, but no `.hdr` extension must exisit in the same directory.
+
+#### Notes for implementer
+
+1. ENVI files can be loaded using [`GDAL`](https://gdal.org/api/python_bindings.html), but its installation may be tricky. Windows packages can be found [here](https://www.lfd.uci.edu/~gohlke/pythonlibs/#gdal), for Linux it probably will have to be built from source.
+
+### `HsImage`
+
+Stores image data:
+
+- raw pixel data as a 3D array [height, width, bands]
+- bits per pixel
+- band labels
+
+If band labels are not provided in the image file a sequence `1..=bands` should be used instead.
+
+Must provide:
+
+- pixel data given its coordinates
+- subarray with pixels bounded by given coordinates
+- a mask with pixels similar to one with given coordinates and a threshold
+- a single band of the image given its index
+- three bands in specified order given their indices
 
 ### `ImagePreview`
 
-Proxies events to `MainWindow` after translating mouse position to pixel coordinates.
+Displays the image preview using specified mode. Proxies events to [`MainWindow`](#mainwindow) after translating mouse position to pixel coordinates. Draws a `QRubberBand` when selecting an area.
 
 *Optional:* Manages zoom and panning.
+
+### `AreaValues` and `PixelValues`
+
+Are derived from [`TypedDict`](https://docs.python.org/3/library/typing.html#typing.TypedDict) ([PEP 589](https://peps.python.org/pep-0589/)). Both store data displayed in [`SpectralViewer`](#spectralviewer) - either *aggregate values* (`AreaValues` - avg, min, max, quartiles) or a single pixel value (`PixelValue`). Their properties are vectors (1D `ndarray`s).
+
+### `SpectralViewer`
+
+Manages the spectral curve chart. Chart is labeled using stored labels, which should be updated when a file is loaded. When created from a pixel or an area it should calculate appropriate values, store them as [`PixelValues`](#areavalues-and-pixelvalues) or [`AreaValues`](#areavalues-and-pixelvalues) and update the chart.\
+Two methods for exporting must be provided:
+
+- exporting to CSV - simply write [`PixelValues` or `AreaValues`](#areavalues-and-pixelvalues) and labels to CSV
+- exporting as PNG - render the `chart` or `chart_view` to a `QPixmap` and save it
+
+**Note:** If needed exporting as JPEG can also be provided just by allowing to save `QPixmap` with `jpg`/`jpeg` extension.
 
 # High level overview
 
@@ -227,3 +380,7 @@ stateDiagram-v2
   s_px --> sim : Select similar pixels clicked
   SelectArea --> sim : Select similar pixels clicked
 ```
+
+## Dynamic diagrams
+
+**TODO:** For each use case draw interactions between classes.
